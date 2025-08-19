@@ -3,70 +3,94 @@ ____  ___ __   __
 | __|/ _ \\ \ / /
 | _|| (_) |> w <
 |_|  \___//_/ \_\
-FOX's Spring Lib v1.0.0
+FOX's Spring Lib v1.1.0
 --]]
+--#REGION ˚♡ Localize Vars ♡˚
+
+local axis = vec(0, 1, 0)
+local invertY = vec(1, -1, 1)
+
+local mat4 = matrices.mat4()
+local vec3 = vectors.vec3()
+
+local _vec_rot = vectors.rotateAroundAxis
+local _math_max = math.max
+local _math_lerp = math.lerp
+
+--#ENDREGION
 --#REGION ˚♡ FOXSpring ♡˚
 
 ---@class FOXSpring
 local FOXSpring = {}
 local springMeta = { __index = FOXSpring, __type = "FOXSpring" }
 
-local axis = vec(0, 1, 0)
-
 ---@package
 function FOXSpring:tick()
 	---@type FOXSpring.Internal
-	local sprVec = self[1]
+	local priv = self[1]
+
+	local vel, pos = priv.vel, priv.pos
+	local entity = self.entity or player
 
 	-- Gets the directional velocity rotated to player-space
 
-	local playerVelocity = player:getVelocity():mul(1, -1, 1) * self.velStrength
-	local relativeVelocity = vectors.rotateAroundAxis(player:getBodyYaw(), playerVelocity, axis):add(self.deformation)
+	local entityVelocity = self.velStrength and entity:getVelocity() * self.velStrength or 0
+	local appliedForce = priv.temp or 0
+	local rawVelocity = (entityVelocity + appliedForce) * invertY
+
+	local relativeVelocity = _vec_rot(entity:getBodyYaw(), rawVelocity, axis)
+	local deformation = self.deformation or 0
 
 	-- Do the physics (Hooke's Law)
 
-	local displacement = sprVec.pos - relativeVelocity
-	local dampingForce = self.viscosity * sprVec.vel
+	local displacement = pos - relativeVelocity - deformation
+	local dampingForce = self.viscosity * vel
 	local force = -self.springiness * displacement - dampingForce
 
-	sprVec.vel = sprVec.vel + force
-	sprVec.pos = sprVec.pos + sprVec.vel
+	vel = (vel + force):clampLength(0, 100) -- Clamp velocity
+	pos = pos + vel
 
-	sprVec.old = sprVec.new
-	sprVec.new = sprVec.pos
+	-- Shears the matrix according to directinal velocity, and clamp the flatness
 
-	assert(sprVec.vel:length() < 100, "Velocity exceeded 100 blocks per second!") -- Do not remove this check, it's for your own protection
-end
-
----@package
-function FOXSpring:render(delta)
-	---@type FOXSpring.Internal
-	local sprVec = self[1]
-
-	-- Shears the matrix according to directinal velocity
-
-	local mat = matrices.mat4()
-	mat.c2 = math.lerp(sprVec.old, sprVec.new, delta) --[[@as Vector3]]
-		:add(0, 1)
-		:augmented(0)
-	mat.v22 = math.max(0.1, mat.v22)
+	local mat = mat4:copy()
+	mat.c2 = (pos + axis):augmented(0)
+	mat.v22 = _math_max(0.05, mat.v22)
 
 	-- Stretches the matrix inverse to the vertical shear
 
 	local squish = mat.v22 ^ -self.squishiness
 	mat:scale(squish, 1, squish)
 
+	-- Apply offset matrix
+
 	if self.offsetMat then mat:multiply(self.offsetMat) end
 
-	-- Apply the matrix
+	-- Update private vars
 
-	self.model:matrix(mat)
+	priv.vel = vel
+	priv.pos = pos
+	priv.old = priv.new
+	priv.new = mat
+	priv.temp = nil
+end
+
+---@package
+function FOXSpring:render(delta)
+	---@type FOXSpring.Internal
+	local priv = self[1]
+	self.model:matrix(_math_lerp(priv.old, priv.new, delta))
 end
 
 ---Removes this spring
 function FOXSpring:remove()
 	events.tick:remove(self[1].tick)
 	events.render:remove(self[1].render)
+end
+
+---Applies a temporary directinal force to this spring
+---@param force Vector3
+function FOXSpring:applyForce(force)
+	self[1].temp = -force
 end
 
 --#ENDREGION
@@ -84,6 +108,7 @@ function FOXSpringLib:new(model, cfg)
 
 	---@class FOXSpring.Config
 	---@field model ModelPart|RenderTask.any|EntityTask? Model to apply springiness to
+	---@field entity Player|LivingEntity? `nil` - The entity to take relative velocity from. If this is nil, it will default to the avatar entity
 	---@field velStrength number|Vector3? `1, 1, 1` - How much the player's velocity affects the spring
 	---@field offsetMat Matrix4? `nil` - Applies an offset matrix which you can scale, transform, and rotate
 	---@field springiness number|Vector3? `1, 1, 1` - How much the force will try to spring back. Recommended values between 0 and 2
@@ -93,7 +118,8 @@ function FOXSpringLib:new(model, cfg)
 
 	---@class FOXSpring
 	---@field model ModelPart|RenderTask.any|EntityTask Model to apply springiness to
-	---@field velStrength number|Vector3? `1, 1, 1` - How much the player's velocity affects the spring
+	---@field entity Player|LivingEntity? `nil` - The entity to take relative velocity from. If this is nil, it will default to the avatar entity
+	---@field velStrength number|Vector3? `1, 1, 1` - How much the player's velocity affects the spring. If this is nil, the velocity won't be taken
 	---@field offsetMat Matrix4 `nil` - Applies an offset matrix which you can scale, transform, and rotate
 	---@field springiness number|Vector3 `1, 1, 1` - How much the force will try to spring back. Recommended values between 0 and 2
 	---@field squishiness number `0.5` - How much to widen the spring when it compresses
@@ -102,7 +128,6 @@ function FOXSpringLib:new(model, cfg)
 	local spring = setmetatable({
 		model = model,
 		velStrength = vec(1, 1, 1),
-		offsetMat = nil,
 
 		springiness = vec(1, 1, 1),
 		squishiness = 0.5,
@@ -122,16 +147,17 @@ function FOXSpringLib:new(model, cfg)
 	---@class FOXSpring.Internal
 	---@field vel Vector3 The spring's velocity
 	---@field pos Vector3 The spring's displacement
-	---@field old Vector3 Used for lerping in render, the old spring displacement
-	---@field new Vector3 Used for lerping in render, the new spring displacement
+	---@field old Matrix4 Used for lerping in render, the old spring displacement
+	---@field new Matrix4 Used for lerping in render, the new spring displacement
+	---@field temp Vector3 The spring's user-applied force
 	---@field tick function This spring's tick function so it can be removed
 	---@field render function This spring's render function so it can be removed
 	---@package
 	spring[1] = {
-		vel = vectors.vec3(),
-		pos = vectors.vec3(),
-		old = vectors.vec3(),
-		new = vectors.vec3(),
+		vel = vec3:copy(),
+		pos = vec3:copy(),
+		old = mat4:copy(),
+		new = mat4:copy(),
 
 		tick = function() spring:tick() end,
 		render = function(delta) spring:render(delta) end,
