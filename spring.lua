@@ -29,13 +29,13 @@ function FOXSpring:tick()
 	---@type FOXSpring.Internal
 	local priv = self[1]
 
-	local vel, pos = priv.vel, priv.pos
+	local vel, userVel, pos = priv.vel, priv.userVel or 0, priv.pos
 	local entity = self.entity or player
 
 	-- Gets the directional velocity rotated to player-space
-
+	
 	local entityVelocity = self.velStrength and entity:getVelocity() * self.velStrength or 0
-	local rawVelocity = entityVelocity * invertY
+	local rawVelocity = (entityVelocity + userVel) * invertY
 
 	local relativeVelocity = _vec_rot(entity:getBodyYaw(), rawVelocity, axis)
 	local deformation = self.deformation or 0
@@ -67,6 +67,7 @@ function FOXSpring:tick()
 	-- Update private vars
 
 	priv.vel = vel
+	priv.userVel = nil
 	priv.pos = pos
 	priv.old = priv.new
 	priv.new = mat
@@ -88,8 +89,7 @@ end
 ---Applies a temporary directinal force to this spring
 ---@param force Vector3
 function FOXSpring:applyForce(force)
-	local angle = (self.entity or player):getBodyYaw(client.getFrameTime())
-	self[1].vel = self[1].vel - _vec_rot(angle, force, axis) * invertY
+	self[1].userVel = (self[1].userVel or 0) - force
 end
 
 --#ENDREGION
@@ -145,6 +145,7 @@ function FOXSpringLib:new(model, cfg)
 
 	---@class FOXSpring.Internal
 	---@field vel Vector3 The spring's velocity
+	---@field userVel Vector3 The spring's user-applied velocity
 	---@field pos Vector3 The spring's displacement
 	---@field old Matrix4 Used for lerping in render, the old spring displacement
 	---@field new Matrix4 Used for lerping in render, the new spring displacement
