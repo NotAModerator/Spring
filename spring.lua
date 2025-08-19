@@ -3,7 +3,7 @@ ____  ___ __   __
 | __|/ _ \\ \ / /
 | _|| (_) |> w <
 |_|  \___//_/ \_\
-FOX's Spring Lib v1.1.0
+FOX's Spring Lib v1.1.1
 --]]
 --#REGION ˚♡ Localize Vars ♡˚
 
@@ -35,8 +35,7 @@ function FOXSpring:tick()
 	-- Gets the directional velocity rotated to player-space
 
 	local entityVelocity = self.velStrength and entity:getVelocity() * self.velStrength or 0
-	local appliedForce = priv.temp or 0
-	local rawVelocity = (entityVelocity + appliedForce) * invertY
+	local rawVelocity = entityVelocity * invertY
 
 	local relativeVelocity = _vec_rot(entity:getBodyYaw(), rawVelocity, axis)
 	local deformation = self.deformation or 0
@@ -71,7 +70,6 @@ function FOXSpring:tick()
 	priv.pos = pos
 	priv.old = priv.new
 	priv.new = mat
-	priv.temp = nil
 end
 
 ---@package
@@ -90,7 +88,7 @@ end
 ---Applies a temporary directinal force to this spring
 ---@param force Vector3
 function FOXSpring:applyForce(force)
-	self[1].temp = -force
+	self[1].vel = self[1].vel + force
 end
 
 --#ENDREGION
@@ -149,7 +147,6 @@ function FOXSpringLib:new(model, cfg)
 	---@field pos Vector3 The spring's displacement
 	---@field old Matrix4 Used for lerping in render, the old spring displacement
 	---@field new Matrix4 Used for lerping in render, the new spring displacement
-	---@field temp Vector3 The spring's user-applied force
 	---@field tick function This spring's tick function so it can be removed
 	---@field render function This spring's render function so it can be removed
 	---@package
