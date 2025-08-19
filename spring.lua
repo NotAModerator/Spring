@@ -88,7 +88,8 @@ end
 ---Applies a temporary directinal force to this spring
 ---@param force Vector3
 function FOXSpring:applyForce(force)
-	self[1].vel = self[1].vel + force
+	local angle = (self.entity or player):getBodyYaw(client.getFrameTime())
+	self[1].vel = self[1].vel - _vec_rot(angle, force, axis) * invertY
 end
 
 --#ENDREGION
