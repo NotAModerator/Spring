@@ -3,7 +3,7 @@ ____  ___ __   __
 | __|/ _ \\ \ / /
 | _|| (_) |> w <
 |_|  \___//_/ \_\
-FOX's Spring Lib v1.1.1
+FOX's Spring Lib v1.1.2
 --]]
 --#REGION ˚♡ Localize Vars ♡˚
 
