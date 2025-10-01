@@ -161,7 +161,7 @@ function FOXSpringLib:new(model, cfg)
 		tick = function() spring:tick() end,
 		render = function(delta, context)
 			if context == "PAPERDOLL" then return end
-				spring:render(delta) 
+			spring:render(delta) 
 		end,
 	}
 
