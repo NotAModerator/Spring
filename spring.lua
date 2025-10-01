@@ -159,7 +159,10 @@ function FOXSpringLib:new(model, cfg)
 		new = mat4:copy(),
 
 		tick = function() spring:tick() end,
-		render = function(delta) spring:render(delta) end,
+		render = function(delta, context)
+			if context == "PAPERDOLL" then return end
+				spring:render(delta) 
+		end,
 	}
 
 	events.tick = spring[1].tick
